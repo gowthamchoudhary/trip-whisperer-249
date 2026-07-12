@@ -1,5 +1,7 @@
+import { fetchWithRetry } from './anakin.js';
+
 async function fetchJson(url) {
-  const response = await fetch(url);
+  const response = await fetchWithRetry(url);
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Open-Meteo request failed (${response.status}): ${text}`);
