@@ -9,8 +9,35 @@ function requireApiKey() {
   return process.env.ANAKIN_API_KEY;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function fetchWithRetry(url, options, maxAttempts = 3) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      if (response.status >= 500 || response.status === 429) {
+        throw new Error(`Retryable HTTP ${response.status}`);
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      console.warn(`[Anakin] Attempt ${attempt}/${maxAttempts} failed for ${url}: ${error.message}`);
+      if (attempt < maxAttempts) {
+        await sleep(500 * Math.pow(3, attempt - 1));
+      }
+    }
+  }
+
+  throw new Error(`All ${maxAttempts} attempts failed for ${url}: ${lastError.message}`);
+}
+
 async function anakinFetch(path, options = {}) {
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const url = `${BASE_URL}${path}`;
+  const response = await fetchWithRetry(url, {
     ...options,
     headers: {
       'X-API-Key': requireApiKey(),
@@ -28,10 +55,6 @@ async function anakinFetch(path, options = {}) {
     return null;
   }
   return response.json();
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function summarizeWireResponse(payload) {

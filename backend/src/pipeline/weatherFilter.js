@@ -2,7 +2,9 @@ import { weatherForecast, weatherLocationGeocoding } from '../lib/anakin.js';
 import { forecastWeather, geocodeLocation } from '../lib/openMeteo.js';
 import { insertWeatherScore } from '../lib/supabase.js';
 
+const WEATHER_BACKEND = 'Anakin Wire weather actions with Open-Meteo fallback';
 let useOpenMeteoFallback = false;
+let hasLoggedWeatherBackend = false;
 
 function pickResults(payload) {
   if (Array.isArray(payload)) return payload;
@@ -89,47 +91,69 @@ function computeMatchScore(weatherPreference = '', avgTemp, cloudCoverPct, preci
   return Math.round(clamp(score));
 }
 
+function activeWeatherCall(wireName, fallbackName) {
+  return useOpenMeteoFallback ? `${fallbackName} (Open-Meteo)` : `${wireName} (Anakin Wire)`;
+}
+
 export async function weatherFilter(candidates, intent) {
+  if (!hasLoggedWeatherBackend) {
+    console.log(`[WeatherFilter] Using weather backend: ${WEATHER_BACKEND}`);
+    hasLoggedWeatherBackend = true;
+  }
+
   const scored = [];
 
   for (const candidate of candidates) {
-    const geocoding = await geocodeDestination(candidate.destination_name);
-    const location = pickResults(geocoding)[0];
-    const lat = location?.latitude ?? location?.lat;
-    const lon = location?.longitude ?? location?.lon ?? location?.lng;
+    let activeCall = activeWeatherCall('weatherLocationGeocoding', 'geocodeLocation');
 
-    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) {
-      console.warn(`[Trip Architect] No weather geocode result for ${candidate.destination_name}`);
-      continue;
+    try {
+      const geocoding = await geocodeDestination(candidate.destination_name);
+      const location = pickResults(geocoding)[0];
+      const lat = location?.latitude ?? location?.lat;
+      const lon = location?.longitude ?? location?.lon ?? location?.lng;
+
+      if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) {
+        console.warn(`[Trip Architect] No weather geocode result for ${candidate.destination_name}`);
+        continue;
+      }
+
+      activeCall = activeWeatherCall('weatherForecast', 'forecastWeather');
+      const forecast = await getForecast(Number(lat), Number(lon));
+      const daily = pickDaily(forecast);
+      const maxTemp = average(daily.temperature_2m_max || []);
+      const minTemp = average(daily.temperature_2m_min || []);
+      const avgTemp = Number.isFinite(maxTemp) && Number.isFinite(minTemp) ? (maxTemp + minTemp) / 2 : maxTemp ?? minTemp;
+      const cloudCoverPct = average(daily.cloudcover_mean || daily.cloud_cover_mean || []) ?? 0;
+      const precipitation = average(daily.precipitation_sum || []) ?? 0;
+      const matchScore = computeMatchScore(intent.weather_preference || '', avgTemp, cloudCoverPct, precipitation);
+
+      activeCall = 'insertWeatherScore';
+      const weatherScore = await insertWeatherScore({
+        candidate_id: candidate.id,
+        lat: Number(lat),
+        lon: Number(lon),
+        forecast_data: forecast,
+        avg_temp: avgTemp,
+        cloud_cover_pct: cloudCoverPct,
+        match_score: matchScore
+      });
+
+      scored.push({
+        ...candidate,
+        weather_score: weatherScore
+      });
+    } catch (error) {
+      console.error(`[WeatherFilter] Failed for ${candidate.destination_name}:`, {
+        call: activeCall,
+        message: error.message,
+        cause: error.cause,
+        stack: error.stack
+      });
     }
-
-    const forecast = await getForecast(Number(lat), Number(lon));
-    const daily = pickDaily(forecast);
-    const maxTemp = average(daily.temperature_2m_max || []);
-    const minTemp = average(daily.temperature_2m_min || []);
-    const avgTemp = Number.isFinite(maxTemp) && Number.isFinite(minTemp) ? (maxTemp + minTemp) / 2 : maxTemp ?? minTemp;
-    const cloudCoverPct = average(daily.cloudcover_mean || daily.cloud_cover_mean || []) ?? 0;
-    const precipitation = average(daily.precipitation_sum || []) ?? 0;
-    const matchScore = computeMatchScore(intent.weather_preference || '', avgTemp, cloudCoverPct, precipitation);
-
-    const weatherScore = await insertWeatherScore({
-      candidate_id: candidate.id,
-      lat: Number(lat),
-      lon: Number(lon),
-      forecast_data: forecast,
-      avg_temp: avgTemp,
-      cloud_cover_pct: cloudCoverPct,
-      match_score: matchScore
-    });
-
-    scored.push({
-      ...candidate,
-      weather_score: weatherScore
-    });
   }
 
   if (scored.length === 0) {
-    throw new Error('No candidates could be scored with Wire weather data.');
+    throw new Error('No candidates could be scored with weather data.');
   }
 
   return scored.sort((a, b) => b.weather_score.match_score - a.weather_score.match_score).slice(0, 3);
