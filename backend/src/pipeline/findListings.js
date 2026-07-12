@@ -84,25 +84,32 @@ async function insertAirbnbListings(tripRequest, candidate, checkin, checkout, a
   }
 
   const searchResults = pickResults(await airbnbSearchListings(candidate.destination_name, checkin, checkout, String(adults)));
-  const listingIds = searchResults.map(extractAirbnbListingId).filter(Boolean).slice(0, 3);
+  const listingIds = searchResults.map(extractAirbnbListingId).filter(Boolean).slice(0, 1);
 
   const rows = [];
   for (const listingId of listingIds) {
-    const detail = await airbnbListingDetails(String(listingId), checkin, checkout, String(adults));
-    const detailRoot = detail?.data || detail?.result || detail;
-    const row = await insertListing({
-      trip_request_id: tripRequest.id,
-      candidate_id: candidate.id,
-      source_platform: 'airbnb',
-      listing_name: firstValue(detailRoot, ['listing_name', 'name', 'title']) || 'Airbnb stay',
-      price: extractPrice(detailRoot),
-      currency: firstValue(detailRoot, ['currency', 'currency_code']) || 'INR',
-      rating: firstValue(detailRoot, ['rating', 'review_score']) ? Number(firstValue(detailRoot, ['rating', 'review_score'])) : null,
-      image_url: extractImage(detailRoot),
-      listing_url: `https://www.airbnb.co.in/rooms/${listingId}?check_in=${checkin}&check_out=${checkout}`,
-      is_chosen: false
-    });
-    rows.push({ ...row, candidate, weather_score: candidate.weather_score });
+    try {
+      const detail = await airbnbListingDetails(String(listingId), checkin, checkout, String(adults));
+      const detailRoot = detail?.data || detail?.result || detail;
+      const row = await insertListing({
+        trip_request_id: tripRequest.id,
+        candidate_id: candidate.id,
+        source_platform: 'airbnb',
+        listing_name: firstValue(detailRoot, ['listing_name', 'name', 'title']) || 'Airbnb stay',
+        price: extractPrice(detailRoot),
+        currency: firstValue(detailRoot, ['currency', 'currency_code']) || 'INR',
+        rating: firstValue(detailRoot, ['rating', 'review_score']) ? Number(firstValue(detailRoot, ['rating', 'review_score'])) : null,
+        image_url: extractImage(detailRoot),
+        listing_url: `https://www.airbnb.co.in/rooms/${listingId}?check_in=${checkin}&check_out=${checkout}`,
+        is_chosen: false
+      });
+      rows.push({ ...row, candidate, weather_score: candidate.weather_score });
+    } catch (error) {
+      console.warn(`[Trip Architect] Airbnb details failed for ${listingId}: ${error.message}`);
+      if (rows.length > 0 && error.message.includes('RATE_LIMIT_EXCEEDED')) {
+        break;
+      }
+    }
   }
 
   return rows;
@@ -117,27 +124,34 @@ async function insertAgodaListings(tripRequest, candidate, checkin, checkout, ad
   }
 
   const searchResults = pickResults(await agodaSearchHotels(cityId, checkin, checkout, Number(adults), 1));
-  const hotelIds = searchResults.map(extractAgodaHotelId).filter(Boolean).slice(0, 3);
+  const hotelIds = searchResults.map(extractAgodaHotelId).filter(Boolean).slice(0, 1);
 
   const rows = [];
   for (const hotelId of hotelIds) {
-    const detail = await agodaHotelDetails(hotelId);
-    const detailRoot = detail?.data || detail?.result || detail;
-    const row = await insertListing({
-      trip_request_id: tripRequest.id,
-      candidate_id: candidate.id,
-      source_platform: 'agoda',
-      listing_name: firstValue(detailRoot, ['listing_name', 'hotel_name', 'name', 'title']) || 'Agoda hotel',
-      price: extractPrice(detailRoot),
-      currency: firstValue(detailRoot, ['currency', 'currency_code']) || 'INR',
-      rating: firstValue(detailRoot, ['rating', 'review_score', 'star_rating'])
-        ? Number(firstValue(detailRoot, ['rating', 'review_score', 'star_rating']))
-        : null,
-      image_url: extractImage(detailRoot),
-      listing_url: agodaBookingUrl(detailRoot, cityId, hotelId, checkin, checkout, adults),
-      is_chosen: false
-    });
-    rows.push({ ...row, candidate, weather_score: candidate.weather_score });
+    try {
+      const detail = await agodaHotelDetails(hotelId);
+      const detailRoot = detail?.data || detail?.result || detail;
+      const row = await insertListing({
+        trip_request_id: tripRequest.id,
+        candidate_id: candidate.id,
+        source_platform: 'agoda',
+        listing_name: firstValue(detailRoot, ['listing_name', 'hotel_name', 'name', 'title']) || 'Agoda hotel',
+        price: extractPrice(detailRoot),
+        currency: firstValue(detailRoot, ['currency', 'currency_code']) || 'INR',
+        rating: firstValue(detailRoot, ['rating', 'review_score', 'star_rating'])
+          ? Number(firstValue(detailRoot, ['rating', 'review_score', 'star_rating']))
+          : null,
+        image_url: extractImage(detailRoot),
+        listing_url: agodaBookingUrl(detailRoot, cityId, hotelId, checkin, checkout, adults),
+        is_chosen: false
+      });
+      rows.push({ ...row, candidate, weather_score: candidate.weather_score });
+    } catch (error) {
+      console.warn(`[Trip Architect] Agoda details failed for ${hotelId}: ${error.message}`);
+      if (rows.length > 0 && error.message.includes('RATE_LIMIT_EXCEEDED')) {
+        break;
+      }
+    }
   }
 
   return rows;

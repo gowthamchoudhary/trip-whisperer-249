@@ -19,6 +19,131 @@ async function stage(tripRequestId, status, message) {
   await insertChatMessage(tripRequestId, 'assistant', message);
 }
 
+function extractListingProviderId(listing) {
+  if (!listing?.listing_url) return null;
+
+  try {
+    const url = new URL(listing.listing_url);
+
+    if (listing.source_platform === 'airbnb') {
+      const roomMatch = url.pathname.match(/\/rooms\/([^/?#]+)/);
+      return roomMatch?.[1] || null;
+    }
+
+    if (listing.source_platform === 'agoda') {
+      return url.searchParams.get('hotelId') || url.searchParams.get('hotel_id') || url.searchParams.get('hotel');
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function buildMonitorConfig(listing, intent) {
+  const alertWebhookUrl = process.env.MONITOR_WEBHOOK_URL;
+  if (!alertWebhookUrl) {
+    return {
+      config: null,
+      reason: 'MONITOR_WEBHOOK_URL is not configured.'
+    };
+  }
+
+  const providerId = extractListingProviderId(listing);
+  if (!providerId) {
+    return {
+      config: null,
+      reason: `Could not derive provider listing id from ${listing.source_platform} URL.`
+    };
+  }
+
+  const intervalMinutes = Number(process.env.MONITOR_INTERVAL_MINUTES || 360);
+  const checkin = intent.date_range_start;
+  const checkout = intent.date_range_end;
+  const adults = String(intent.adults || 2);
+
+  if (listing.source_platform === 'airbnb') {
+    return {
+      config: {
+        url: listing.listing_url,
+        scope: 'wire',
+        wireActionId: 'ab_listing_details',
+        wireCatalogSlug: 'airbnb',
+        wireParams: {
+          listing_id: String(providerId),
+          checkin,
+          checkout,
+          adults
+        },
+        intervalMinutes,
+        alertWebhookUrl
+      }
+    };
+  }
+
+  if (listing.source_platform === 'agoda') {
+    return {
+      config: {
+        url: listing.listing_url,
+        scope: 'wire',
+        wireActionId: 'ag_hotel_details',
+        wireCatalogSlug: 'agoda',
+        wireParams: {
+          hotel_id: String(providerId),
+          language_id: 1,
+          currency_code: listing.currency || 'INR'
+        },
+        intervalMinutes,
+        alertWebhookUrl
+      }
+    };
+  }
+
+  return {
+    config: null,
+    reason: `Unsupported monitor source platform: ${listing.source_platform}.`
+  };
+}
+
+async function tryCreateMonitor(tripRequestId, listing, intent) {
+  const { config, reason } = buildMonitorConfig(listing, intent);
+  if (!config) {
+    console.warn(`[Trip Architect] ${tripRequestId}: monitoring skipped - ${reason}`);
+    await insertChatMessage(tripRequestId, 'assistant', `Price monitoring was skipped: ${reason}`);
+    return false;
+  }
+
+  try {
+    const monitor = await createMonitor(config);
+    console.log(
+      `[Trip Architect] ${tripRequestId}: monitor created ${monitor.id || monitor.monitor_id || 'unknown'} ` +
+        `(webhook secret ${monitor.alertWebhookSecret || monitor.alert_webhook_secret ? 'returned' : 'not returned'})`
+    );
+
+    await insertMonitor({
+      listing_id: listing.id,
+      anakin_monitor_id: monitor.id || monitor.monitor_id,
+      alert_webhook_secret: monitor.alertWebhookSecret || monitor.alert_webhook_secret || null,
+      status: monitor.status || 'active',
+      last_checked_at: new Date().toISOString(),
+      current_price: listing.price,
+      price_history: [
+        {
+          price: listing.price,
+          currency: listing.currency,
+          checked_at: new Date().toISOString()
+        }
+      ]
+    });
+
+    return true;
+  } catch (error) {
+    console.error(`[Trip Architect] ${tripRequestId}: monitoring failed`, error);
+    await insertChatMessage(tripRequestId, 'assistant', `Price monitoring could not be started: ${error.message}`);
+    return false;
+  }
+}
+
 export async function orchestrateTrip(tripRequest, userMessage) {
   let intent = null;
 
@@ -58,31 +183,15 @@ export async function orchestrateTrip(tripRequest, userMessage) {
     const chosenListing = await getListingById(decision.chosen_listing_id);
 
     await stage(tripRequest.id, 'monitoring', 'I am setting up price monitoring for the chosen listing.');
-    const monitor = await createMonitor({
-      scope: 'wire',
-      listing_id: chosenListing.id,
-      listing_url: chosenListing.listing_url,
-      current_price: chosenListing.price,
-      currency: chosenListing.currency,
-      webhook_url: process.env.MONITOR_WEBHOOK_URL
-    });
+    const monitorStarted = await tryCreateMonitor(tripRequest.id, chosenListing, mergedIntent);
 
-    await insertMonitor({
-      listing_id: chosenListing.id,
-      anakin_monitor_id: monitor.id || monitor.monitor_id,
-      status: monitor.status || 'active',
-      last_checked_at: new Date().toISOString(),
-      current_price: chosenListing.price,
-      price_history: [
-        {
-          price: chosenListing.price,
-          currency: chosenListing.currency,
-          checked_at: new Date().toISOString()
-        }
-      ]
-    });
-
-    await stage(tripRequest.id, 'completed', 'Your trip plan is ready, and I will watch the chosen listing for price changes.');
+    await stage(
+      tripRequest.id,
+      'completed',
+      monitorStarted
+        ? 'Your trip plan is ready, and I will watch the chosen listing for price changes.'
+        : 'Your trip plan is ready. Price monitoring was skipped, but the itinerary and booking options are available.'
+    );
     return decision;
   } catch (error) {
     console.error(`[Trip Architect] ${tripRequest.id}: failed`, error);

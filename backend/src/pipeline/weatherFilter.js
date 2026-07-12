@@ -1,5 +1,8 @@
 import { weatherForecast, weatherLocationGeocoding } from '../lib/anakin.js';
+import { forecastWeather, geocodeLocation } from '../lib/openMeteo.js';
 import { insertWeatherScore } from '../lib/supabase.js';
+
+let useOpenMeteoFallback = false;
 
 function pickResults(payload) {
   if (Array.isArray(payload)) return payload;
@@ -11,6 +14,44 @@ function pickResults(payload) {
 
 function pickDaily(payload) {
   return payload?.daily || payload?.result?.daily || payload?.data?.daily || payload?.forecast?.daily || {};
+}
+
+function isMissingWireAction(error) {
+  return error.message.includes('Action not found') || error.message.includes('404 /wire/task');
+}
+
+async function geocodeDestination(destinationName) {
+  if (useOpenMeteoFallback) {
+    return geocodeLocation(destinationName);
+  }
+
+  try {
+    return await weatherLocationGeocoding(destinationName);
+  } catch (error) {
+    if (!isMissingWireAction(error)) {
+      throw error;
+    }
+    useOpenMeteoFallback = true;
+    console.warn(`[Trip Architect] Wire weather geocoding unavailable, using Open-Meteo for ${destinationName}`);
+    return geocodeLocation(destinationName);
+  }
+}
+
+async function getForecast(latitude, longitude) {
+  if (useOpenMeteoFallback) {
+    return forecastWeather(latitude, longitude, 7);
+  }
+
+  try {
+    return await weatherForecast(latitude, longitude, 7);
+  } catch (error) {
+    if (!isMissingWireAction(error)) {
+      throw error;
+    }
+    useOpenMeteoFallback = true;
+    console.warn('[Trip Architect] Wire weather forecast unavailable, using Open-Meteo forecast');
+    return forecastWeather(latitude, longitude, 7);
+  }
 }
 
 function average(values = []) {
@@ -52,7 +93,7 @@ export async function weatherFilter(candidates, intent) {
   const scored = [];
 
   for (const candidate of candidates) {
-    const geocoding = await weatherLocationGeocoding(candidate.destination_name);
+    const geocoding = await geocodeDestination(candidate.destination_name);
     const location = pickResults(geocoding)[0];
     const lat = location?.latitude ?? location?.lat;
     const lon = location?.longitude ?? location?.lon ?? location?.lng;
@@ -62,12 +103,12 @@ export async function weatherFilter(candidates, intent) {
       continue;
     }
 
-    const forecast = await weatherForecast(Number(lat), Number(lon), 7);
+    const forecast = await getForecast(Number(lat), Number(lon));
     const daily = pickDaily(forecast);
     const maxTemp = average(daily.temperature_2m_max || []);
     const minTemp = average(daily.temperature_2m_min || []);
     const avgTemp = Number.isFinite(maxTemp) && Number.isFinite(minTemp) ? (maxTemp + minTemp) / 2 : maxTemp ?? minTemp;
-    const cloudCoverPct = average(daily.cloudcover_mean || []) ?? 0;
+    const cloudCoverPct = average(daily.cloudcover_mean || daily.cloud_cover_mean || []) ?? 0;
     const precipitation = average(daily.precipitation_sum || []) ?? 0;
     const matchScore = computeMatchScore(intent.weather_preference || '', avgTemp, cloudCoverPct, precipitation);
 
