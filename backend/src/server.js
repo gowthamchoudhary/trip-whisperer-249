@@ -6,24 +6,18 @@ import { planTripRouter } from './routes/planTrip.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
-const allowedOrigins = (
-  process.env.FRONTEND_ORIGIN ||
-  'http://localhost:5173,http://127.0.0.1:5173,https://trip-whisperer-249.vercel.app'
-)
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+
+app.use((req, res, next) => {
+  console.log(`[CORS DEBUG] ${req.method} ${req.path} - Origin: ${req.headers.origin}`);
+  next();
+});
 
 app.use(cors({
-  origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-      return;
-    }
-    callback(new Error(`CORS blocked origin: ${origin}`));
-  },
+  origin: true,
   credentials: true
 }));
+
+app.options('*', cors({ origin: true, credentials: true }));
 
 app.use('/api/webhook', express.raw({ type: '*/*' }), monitorWebhookRouter);
 app.use(express.json());
