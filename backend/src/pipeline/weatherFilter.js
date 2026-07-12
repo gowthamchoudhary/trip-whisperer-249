@@ -18,10 +18,6 @@ function pickDaily(payload) {
   return payload?.daily || payload?.result?.daily || payload?.data?.daily || payload?.forecast?.daily || {};
 }
 
-function isMissingWireAction(error) {
-  return error.message.includes('Action not found') || error.message.includes('404 /wire/task');
-}
-
 async function geocodeDestination(destinationName) {
   if (useOpenMeteoFallback) {
     return geocodeLocation(destinationName);
@@ -30,11 +26,10 @@ async function geocodeDestination(destinationName) {
   try {
     return await weatherLocationGeocoding(destinationName);
   } catch (error) {
-    if (!isMissingWireAction(error)) {
-      throw error;
-    }
     useOpenMeteoFallback = true;
-    console.warn(`[Trip Architect] Wire weather geocoding unavailable, using Open-Meteo for ${destinationName}`);
+    console.warn(
+      `[Trip Architect] Wire weather geocoding unavailable, using Open-Meteo for ${destinationName}: ${error.message}`
+    );
     return geocodeLocation(destinationName);
   }
 }
@@ -47,11 +42,8 @@ async function getForecast(latitude, longitude) {
   try {
     return await weatherForecast(latitude, longitude, 7);
   } catch (error) {
-    if (!isMissingWireAction(error)) {
-      throw error;
-    }
     useOpenMeteoFallback = true;
-    console.warn('[Trip Architect] Wire weather forecast unavailable, using Open-Meteo forecast');
+    console.warn(`[Trip Architect] Wire weather forecast unavailable, using Open-Meteo forecast: ${error.message}`);
     return forecastWeather(latitude, longitude, 7);
   }
 }
@@ -95,6 +87,33 @@ function activeWeatherCall(wireName, fallbackName) {
   return useOpenMeteoFallback ? `${fallbackName} (Open-Meteo)` : `${wireName} (Anakin Wire)`;
 }
 
+async function insertFallbackWeatherScore(candidate, reason, error = null) {
+  console.warn(`[WeatherFilter] Using neutral fallback weather score for ${candidate.destination_name}: ${reason}`);
+  const weatherScore = await insertWeatherScore({
+    candidate_id: candidate.id,
+    lat: null,
+    lon: null,
+    forecast_data: {
+      fallback: true,
+      reason,
+      error: error
+        ? {
+            message: error.message,
+            cause: error.cause ? String(error.cause) : null
+          }
+        : null
+    },
+    avg_temp: null,
+    cloud_cover_pct: null,
+    match_score: 60
+  });
+
+  return {
+    ...candidate,
+    weather_score: weatherScore
+  };
+}
+
 export async function weatherFilter(candidates, intent) {
   if (!hasLoggedWeatherBackend) {
     console.log(`[WeatherFilter] Using weather backend: ${WEATHER_BACKEND}`);
@@ -114,6 +133,7 @@ export async function weatherFilter(candidates, intent) {
 
       if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) {
         console.warn(`[Trip Architect] No weather geocode result for ${candidate.destination_name}`);
+        scored.push(await insertFallbackWeatherScore(candidate, 'No geocode result returned by weather providers.'));
         continue;
       }
 
@@ -149,6 +169,7 @@ export async function weatherFilter(candidates, intent) {
         cause: error.cause,
         stack: error.stack
       });
+      scored.push(await insertFallbackWeatherScore(candidate, `${activeCall} failed after retries.`, error));
     }
   }
 
