@@ -48,7 +48,7 @@ export async function researchDestinations(prompt) {
     body: JSON.stringify({ prompt })
   });
 
-  const id = created.id || created.search_id || created.task_id;
+  const id = created.id || created.search_id || created.task_id || created.job_id;
   if (!id) {
     return created;
   }
@@ -175,6 +175,12 @@ export async function weatherHistorical(latitude, longitude, start_date, end_dat
 }
 
 export async function createMonitor(config) {
+  const requiredFields = ['url', 'scope', 'wireActionId', 'wireCatalogSlug', 'wireParams', 'intervalMinutes', 'alertWebhookUrl'];
+  const missingFields = requiredFields.filter((field) => config[field] === undefined || config[field] === null || config[field] === '');
+  if (missingFields.length > 0) {
+    throw new Error(`Monitor config is missing required field(s): ${missingFields.join(', ')}`);
+  }
+
   return anakinFetch('/monitors', {
     method: 'POST',
     body: JSON.stringify(config)

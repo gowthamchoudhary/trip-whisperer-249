@@ -7,7 +7,27 @@ function pickArray(payload) {
   if (Array.isArray(payload?.destinations)) return payload.destinations;
   if (Array.isArray(payload?.results)) return payload.results;
   if (Array.isArray(payload?.data?.results)) return payload.data.results;
+  if (Array.isArray(payload?.data?.candidates)) return payload.data.candidates;
+  if (Array.isArray(payload?.data?.destinations)) return payload.data.destinations;
+  if (Array.isArray(payload?.output?.candidates)) return payload.output.candidates;
+  if (Array.isArray(payload?.output?.destinations)) return payload.output.destinations;
+  if (Array.isArray(payload?.result?.candidates)) return payload.result.candidates;
+  if (Array.isArray(payload?.result?.destinations)) return payload.result.destinations;
+  if (Array.isArray(payload?.generatedJson?.structured_data?.candidates)) {
+    return payload.generatedJson.structured_data.candidates;
+  }
+  if (Array.isArray(payload?.generatedJson?.structured_data?.destinations)) {
+    return payload.generatedJson.structured_data.destinations;
+  }
+  if (Array.isArray(payload?.generatedJson?.structured_data)) {
+    return payload.generatedJson.structured_data;
+  }
   return [];
+}
+
+function summarizePayload(payload) {
+  const text = JSON.stringify(payload);
+  return text.length > 1200 ? `${text.slice(0, 1200)}...` : text;
 }
 
 function normalizeCandidate(item, index) {
@@ -36,6 +56,7 @@ export async function researchDestinations(tripRequestId, intent) {
   const rawCandidates = pickArray(response).slice(0, 6);
 
   if (rawCandidates.length === 0) {
+    console.error(`[Trip Architect] Empty Anakin destination response: ${summarizePayload(response)}`);
     throw new Error('Anakin did not return any destination candidates.');
   }
 

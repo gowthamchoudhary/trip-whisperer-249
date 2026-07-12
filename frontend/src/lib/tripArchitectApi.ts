@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || "https://trip-whisperer-249.onrender.com";
 
 export interface TripMessage {
   id: string;
@@ -10,6 +10,7 @@ export interface TripMessage {
 export interface TripRequest {
   id: string;
   status: string;
+  user_id?: string | null;
   budget?: number | null;
   duration_days?: number | null;
   terrain_preference?: string | null;
@@ -17,11 +18,14 @@ export interface TripRequest {
   date_range_start?: string | null;
   date_range_end?: string | null;
   origin_city?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface TripListing {
   id: string;
   candidate_id: string;
+  trip_request_id?: string;
   source_platform: "airbnb" | "agoda" | string;
   listing_name: string;
   price: number | null;
@@ -30,6 +34,21 @@ export interface TripListing {
   image_url: string | null;
   listing_url: string | null;
   is_chosen: boolean;
+}
+
+export interface TripMonitor {
+  id: string;
+  listing_id: string;
+  anakin_monitor_id: string | null;
+  status: string;
+  last_checked_at: string | null;
+  current_price: number | null;
+  price_history: Array<{
+    price?: number | null;
+    currency?: string | null;
+    checked_at?: string | null;
+  }>;
+  created_at?: string;
 }
 
 export interface TripCandidate {
@@ -61,6 +80,16 @@ export interface TripSummary {
   candidates: TripCandidate[];
   listings: TripListing[];
   flights: TripFlight[];
+  monitors: TripMonitor[];
+}
+
+export interface TripHistoryRow extends TripRequest {
+  candidates?: Array<{
+    destination_name: string;
+    weather_scores?: Array<{
+      match_score: number | null;
+    }>;
+  }>;
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -71,7 +100,12 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export async function startTripPlan(userMessage: string, tripRequestId?: string, userId?: string) {
+export async function startTripPlan(
+  userMessage: string,
+  tripRequestId?: string,
+  userId?: string,
+  messageInserted = false,
+) {
   const response = await fetch(`${API_BASE_URL}/api/plan-trip`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -79,6 +113,7 @@ export async function startTripPlan(userMessage: string, tripRequestId?: string,
       trip_request_id: tripRequestId,
       user_message: userMessage,
       user_id: userId,
+      message_inserted: messageInserted,
     }),
   });
 
@@ -88,4 +123,9 @@ export async function startTripPlan(userMessage: string, tripRequestId?: string,
 export async function getTripSummary(tripRequestId: string) {
   const response = await fetch(`${API_BASE_URL}/api/trip/${tripRequestId}`);
   return parseResponse<TripSummary>(response);
+}
+
+export async function getTripHistory(userId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/trips?user_id=${encodeURIComponent(userId)}`);
+  return parseResponse<{ trips: TripHistoryRow[] }>(response);
 }

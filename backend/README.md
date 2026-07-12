@@ -13,7 +13,7 @@ npm start
 
 The API starts on `http://localhost:4000` by default.
 
-Apply `supabase/create_flights_table.sql` once in Supabase before enabling the flight stage.
+Apply `supabase/create_core_tables.sql` once in the Supabase SQL editor before running the pipeline.
 
 ## Environment variables
 
@@ -24,8 +24,9 @@ Apply `supabase/create_flights_table.sql` once in Supabase before enabling the f
 - `GROQ_API_KEY`: Groq API key for intent parsing and ranking.
 - `GROQ_MODEL`: Optional Groq model override. Defaults to `llama-3.3-70b-versatile`.
 - `ANAKIN_API_KEY`: Anakin API key for agentic search, Wire listings, Wire weather, Wire flights, and monitors.
-- `MONITOR_WEBHOOK_SECRET`: Shared secret for verifying Anakin monitor webhook signatures.
+- `MONITOR_WEBHOOK_SECRET`: Optional fallback shared secret for older Anakin monitor webhook signatures. New monitor secrets are stored per monitor.
 - `MONITOR_WEBHOOK_URL`: Public webhook URL passed to Anakin when creating listing monitors.
+- `MONITOR_INTERVAL_MINUTES`: Optional monitor polling interval. Defaults to `360`.
 
 ## Endpoints
 
@@ -43,4 +44,4 @@ The orchestrator runs:
 4. Find Airbnb and Agoda listings through confirmed Wire action IDs.
 5. Find Google Flights options through Wire where airport mappings are available.
 6. Rank options with Groq using weather, stay price, flight price, and total cost.
-7. Create an Anakin monitor and update Supabase status/messages for frontend realtime updates.
+7. Create an Anakin monitor when `MONITOR_WEBHOOK_URL` is configured, then update Supabase status/messages for frontend updates.

@@ -95,7 +95,22 @@ export async function findFlights(tripRequest, candidates, intent) {
       continue;
     }
 
-    const payload = await flightSearch(origin, destination, date, String(adults));
+    let payload;
+    try {
+      payload = await flightSearch(origin, destination, date, String(adults));
+    } catch (error) {
+      if (
+        error.message.includes('Action not found') ||
+        error.message.includes('404 /wire/task') ||
+        error.message.includes('RATE_LIMIT_EXCEEDED') ||
+        error.message.includes('429 /wire/task')
+      ) {
+        console.warn(`[Trip Architect] Flight Wire unavailable; skipping flights for ${origin} to ${destination}: ${error.message}`);
+        continue;
+      }
+      throw error;
+    }
+
     const results = pickResults(payload).slice(0, 3);
     for (const flight of results) {
       const row = await insertFlight({

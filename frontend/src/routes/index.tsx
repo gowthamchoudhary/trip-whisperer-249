@@ -79,25 +79,8 @@ function Hero() {
   return (
     <section className="relative">
       <div className="mx-auto max-w-6xl px-6 pt-8 pb-16 text-center">
-        {/* Social proof */}
-        <div className="mx-auto inline-flex items-center gap-3 rounded-full border border-border/70 bg-card py-1 pl-1 pr-4 shadow-sm">
-          <div className="flex -space-x-2">
-            {[11, 32, 47].map((n) => (
-              <img
-                key={n}
-                src={`https://i.pravatar.cc/40?img=${n}`}
-                alt=""
-                className="h-6 w-6 rounded-full border-2 border-card object-cover"
-              />
-            ))}
-          </div>
-          <span className="text-xs font-medium text-foreground">
-            25K+ travelers planning smarter
-          </span>
-        </div>
-
         {/* Headline */}
-        <h1 className="mt-6 text-5xl font-bold tracking-tight text-foreground md:text-6xl">
+        <h1 className="mt-2 text-5xl font-bold tracking-tight text-foreground md:text-6xl">
           Weather-Matched Trips.
           <br />
           <span className="text-brand">Perfectly Planned for You.</span>
@@ -178,21 +161,24 @@ function Hero() {
           </div>
 
           <div className="flex items-center gap-2 rounded-2xl border border-border/70 bg-card p-2 shadow-[0_4px_20px_-8px_rgba(15,23,42,0.12)]">
-            <FilterField label="Budget" value="₹ 40,000" />
+            <FilterField label="Budget" value="Your budget" />
             <div className="h-10 w-px bg-border" />
-            <FilterField label="Duration" value="3 Days" />
+            <FilterField label="Duration" value="Trip length" />
             <div className="h-10 w-px bg-border" />
-            <FilterField label="Vibe" value="Mountains, Cloudy" />
-            <button className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-brand-foreground shadow-sm hover:opacity-90">
+            <FilterField label="Vibe" value="Weather + style" />
+            <Link
+              to="/app"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-brand-foreground shadow-sm hover:opacity-90"
+            >
               Plan My Trip
               <ArrowRight className="h-4 w-4" />
-            </button>
+            </Link>
           </div>
         </div>
 
         <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
           <ShieldCheck className="h-3.5 w-3.5 text-brand" />
-          All data is live and updated in real-time from trusted sources
+          Personalized picks, timely prices, and weather-aware planning
         </p>
 
         {/* Cards row */}
@@ -244,6 +230,7 @@ function WeatherCard() {
     { d: "Sun", t: "17°" },
     { d: "Mon", t: "18°" },
   ];
+
   return (
     <div className="rounded-2xl border border-border/70 bg-card p-5 text-left shadow-sm">
       <p className="text-sm font-semibold text-foreground">Manali, Himachal Pradesh</p>
@@ -261,11 +248,11 @@ function WeatherCard() {
         Great weather for your trip!
       </p>
       <div className="mt-4 grid grid-cols-5 gap-1 text-center">
-        {days.map((x) => (
-          <div key={x.d}>
-            <p className="text-[10px] text-muted-foreground">{x.d}</p>
+        {days.map((day) => (
+          <div key={day.d}>
+            <p className="text-[10px] text-muted-foreground">{day.d}</p>
             <Cloud className="mx-auto my-1 h-4 w-4 text-muted-foreground/70" />
-            <p className="text-[11px] font-semibold text-foreground">{x.t}</p>
+            <p className="text-[11px] font-semibold text-foreground">{day.t}</p>
           </div>
         ))}
       </div>
@@ -298,7 +285,7 @@ function HeroImageCard() {
             From <span className="text-base font-bold text-success-foreground">₹8,450</span>{" "}
             <span className="text-[11px]">/ person</span>
           </p>
-          <button className="rounded-md bg-brand/10 px-2.5 py-1 text-[11px] font-semibold text-brand">
+          <button className="rounded-full bg-[#1c1c1c] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm">
             View Details
           </button>
         </div>
@@ -373,7 +360,7 @@ function Features() {
     {
       icon: Tag,
       title: "Real Deals, Live Prices",
-      desc: "Flights, stays & activities fetched live from top platforms within your budget.",
+      desc: "Stays and price monitoring stay aligned with your budget.",
     },
     {
       icon: Bell,
@@ -494,7 +481,13 @@ function Footer() {
 
 function LandingPage() {
   return (
-    <div className="min-h-screen bg-surface font-sans text-foreground">
+    <div
+      className="min-h-screen bg-surface bg-cover bg-center bg-fixed font-sans text-foreground"
+      style={{
+        backgroundImage:
+          "linear-gradient(rgba(244,244,242,0.38), rgba(244,244,242,0.52)), url('/bg.png')",
+      }}
+    >
       <Nav />
       <Hero />
       <Features />
