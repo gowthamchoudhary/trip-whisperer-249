@@ -32,7 +32,14 @@ type AuthMode = "signin" | "signup";
 
 function authRedirectUrl() {
   if (typeof window === "undefined") return undefined;
-  return `${window.location.origin}/auth`;
+  const currentRedirectUrl = `${window.location.origin}/auth`;
+  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+  if (!isLocalhost) {
+    return currentRedirectUrl;
+  }
+
+  return import.meta.env.VITE_AUTH_REDIRECT_URL || currentRedirectUrl;
 }
 
 function readSupabaseUrlError() {
