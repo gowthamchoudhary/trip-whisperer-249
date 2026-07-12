@@ -120,6 +120,28 @@ export function updateMonitor(id, values) {
   return unwrap(supabase.from('monitors').update(values).eq('id', id).select().single(), 'Failed to update monitor');
 }
 
-export function insertItineraryDay(row) {
-  return unwrap(supabase.from('itinerary_days').insert(row).select().single(), 'Failed to insert itinerary day');
+export async function insertItineraryDay(row) {
+  const { data, error } = await supabase.from('itinerary_days').insert(row).select().single();
+  if (!error) {
+    return data;
+  }
+
+  const missingSourceCitations =
+    row.source_citations !== undefined &&
+    error.message?.includes("Could not find the 'source_citations' column");
+
+  if (!missingSourceCitations) {
+    throw new Error(`Failed to insert itinerary day: ${error.message}`);
+  }
+
+  const { source_citations: _sourceCitations, ...compatibleRow } = row;
+  console.warn(
+    '[Trip Architect] itinerary_days.source_citations is missing from Supabase schema cache; ' +
+      'retrying itinerary insert without citations. Run the SQL migration to preserve sources.'
+  );
+
+  return unwrap(
+    supabase.from('itinerary_days').insert(compatibleRow).select().single(),
+    'Failed to insert itinerary day'
+  );
 }
