@@ -60,11 +60,11 @@ function Nav() {
         ))}
       </nav>
       <div className="flex items-center gap-4">
-        <a href="#" className="text-sm text-foreground hover:opacity-80">
+        <Link to="/auth" className="text-sm text-foreground hover:opacity-80">
           Log in
-        </a>
+        </Link>
         <Link
-          to="/app"
+          to="/auth"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground shadow-sm hover:opacity-90"
         >
           Get Started

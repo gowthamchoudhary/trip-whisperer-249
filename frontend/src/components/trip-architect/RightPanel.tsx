@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   MapPin,
   Calendar,
@@ -13,11 +14,29 @@ import {
   CheckSquare,
   Flame,
 } from "lucide-react";
+import type { TripSummary } from "@/lib/tripArchitectApi";
 
-export function RightPanel() {
+interface RightPanelProps {
+  tripSummary: TripSummary | null;
+}
+
+function formatCurrency(value?: number | null, currency = "INR") {
+  if (!Number.isFinite(Number(value))) return "Pending";
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(Number(value));
+}
+
+export function RightPanel({ tripSummary }: RightPanelProps) {
+  const liveListings = tripSummary?.listings.slice(0, 3) || [];
+  const liveFlights = tripSummary?.flights.slice(0, 2) || [];
+  const chosenListing = tripSummary?.listings.find((listing) => listing.is_chosen) || liveListings[0];
+  const status = tripSummary?.trip_request.status || "Idle";
+
   return (
     <aside className="flex w-[340px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-border/60 bg-surface p-4">
-      {/* Top action row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           {[MapPin, Calendar, Link2, Settings].map((Icon, i) => (
@@ -35,71 +54,106 @@ export function RightPanel() {
         </button>
       </div>
 
-      {/* Hot Deals */}
       <Section
         icon={<Flame className="h-4 w-4 text-orange-500" />}
         title="Hot Deals For You"
         footer={<FooterLink label="View All Deals" />}
       >
         <div className="space-y-3">
-          <DealRow
-            image="https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=200&q=70"
-            title="The Orchid Manali"
-            subtitle="Manali, Himachal"
-            meta={
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" /> 4.6 (812)
-              </span>
-            }
-            price="₹3,450"
-            priceSub="/ night"
-            badge={{ text: "15% OFF", tone: "danger" }}
-            link="View on Agoda"
-          />
-          <DealRow
-            image="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=200&q=70"
-            title="Delhi (DEL) → Bagdogra (IXB)"
-            subtitle="IndiGo · Non-stop"
-            meta={<span className="text-xs text-muted-foreground">1h 50m</span>}
-            price="₹4,120"
-            badge={{ text: "Good Price", tone: "success" }}
-            link="View on MakeMyTrip"
-          />
+          {liveListings.length > 0 ? (
+            liveListings.map((listing) => (
+              <DealRow
+                key={listing.id}
+                image={
+                  listing.image_url ||
+                  "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=200&q=70"
+                }
+                title={listing.listing_name}
+                subtitle={listing.source_platform}
+                meta={
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />{" "}
+                    {listing.rating || "New"}
+                  </span>
+                }
+                price={formatCurrency(listing.price, listing.currency || "INR")}
+                badge={{ text: listing.is_chosen ? "Chosen" : "Live", tone: "success" }}
+                link={listing.source_platform === "airbnb" ? "View on Airbnb" : "View on Agoda"}
+              />
+            ))
+          ) : (
+            <>
+              <DealRow
+                image="https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=200&q=70"
+                title="The Orchid Manali"
+                subtitle="Manali, Himachal"
+                meta={
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" /> 4.6 (812)
+                  </span>
+                }
+                price="Rs 3,450"
+                priceSub="/ night"
+                badge={{ text: "15% OFF", tone: "danger" }}
+                link="View on Agoda"
+              />
+              <DealRow
+                image="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=200&q=70"
+                title="Delhi (DEL) to Bagdogra (IXB)"
+                subtitle="IndiGo · Non-stop"
+                meta={<span className="text-xs text-muted-foreground">1h 50m</span>}
+                price="Rs 4,120"
+                badge={{ text: "Good Price", tone: "success" }}
+                link="View flights"
+              />
+            </>
+          )}
         </div>
       </Section>
 
-      {/* Itinerary */}
       <Section
         icon={<Calendar className="h-4 w-4 text-brand" />}
         title="Your Itinerary"
-        rightSlot={<span className="text-xs text-muted-foreground">3 Days Trip</span>}
+        rightSlot={<span className="text-xs text-muted-foreground">{status}</span>}
         footer={<FooterLink label="View Full Itinerary" />}
       >
         <ol className="relative space-y-3 border-l border-border/70 pl-4">
-          {[
-            { day: "Day 1", date: "20 May", title: "Arrive in Darjeeling" },
-            { day: "Day 2", date: "21 May", title: "Darjeeling Local Sightseeing" },
-            { day: "Day 3", date: "22 May", title: "Trek to Tiger Hill & Departure" },
-          ].map((d) => (
-            <li key={d.day} className="relative">
-              <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-brand ring-4 ring-brand-soft" />
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-[11px] text-muted-foreground">
-                    {d.day} · {d.date}
-                  </p>
-                  <p className="text-sm font-medium text-foreground">{d.title}</p>
-                </div>
-                <button className="text-xs font-medium text-brand hover:underline">
-                  View plan
-                </button>
-              </div>
-            </li>
-          ))}
+          {(tripSummary?.candidates.slice(0, 3) || []).length > 0
+            ? tripSummary?.candidates.slice(0, 3).map((candidate, index) => (
+                <li key={candidate.id} className="relative">
+                  <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-brand ring-4 ring-brand-soft" />
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] text-muted-foreground">Option {index + 1}</p>
+                      <p className="text-sm font-medium text-foreground">{candidate.destination_name}</p>
+                    </div>
+                    <span className="text-xs font-medium text-brand">
+                      {candidate.weather_scores?.[0]?.match_score || "-"}%
+                    </span>
+                  </div>
+                </li>
+              ))
+            : [
+                { day: "Day 1", date: "20 May", title: "Arrive in Darjeeling" },
+                { day: "Day 2", date: "21 May", title: "Darjeeling local sightseeing" },
+                { day: "Day 3", date: "22 May", title: "Tiger Hill and departure" },
+              ].map((d) => (
+                <li key={d.day} className="relative">
+                  <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-brand ring-4 ring-brand-soft" />
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] text-muted-foreground">
+                        {d.day} · {d.date}
+                      </p>
+                      <p className="text-sm font-medium text-foreground">{d.title}</p>
+                    </div>
+                    <button className="text-xs font-medium text-brand hover:underline">View plan</button>
+                  </div>
+                </li>
+              ))}
         </ol>
       </Section>
 
-      {/* Price Watcher */}
       <Section
         icon={<Bell className="h-4 w-4 text-brand" />}
         title="Price Watcher"
@@ -111,24 +165,45 @@ export function RightPanel() {
         footer={<FooterLink label="View All Watched" />}
       >
         <div className="space-y-3">
-          <WatchRow
-            icon={<Plane className="h-4 w-4 text-muted-foreground" />}
-            title="Bangalore → Bagdogra"
-            sub="20 May · 1 Adult"
-            current="Current: ₹4,120"
-            change="₹320"
-          />
-          <WatchRow
-            icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
-            title="The Orchid Manali"
-            sub="20 May – 22 May · 2 Nights"
-            current="Current: ₹6,900 / night"
-            change="₹800"
-          />
+          {liveFlights.map((flight) => (
+            <WatchRow
+              key={flight.id}
+              icon={<Plane className="h-4 w-4 text-muted-foreground" />}
+              title={`${flight.origin} to ${flight.destination}`}
+              sub={flight.airline || "Flight option"}
+              current={`Current: ${formatCurrency(flight.price)}`}
+              change={flight.duration || "Live"}
+            />
+          ))}
+          {chosenListing ? (
+            <WatchRow
+              icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
+              title={chosenListing.listing_name}
+              sub={chosenListing.source_platform}
+              current={`Current: ${formatCurrency(chosenListing.price, chosenListing.currency || "INR")}`}
+              change="Watching"
+            />
+          ) : (
+            <>
+              <WatchRow
+                icon={<Plane className="h-4 w-4 text-muted-foreground" />}
+                title="Bangalore to Bagdogra"
+                sub="20 May · 1 Adult"
+                current="Current: Rs 4,120"
+                change="Rs 320"
+              />
+              <WatchRow
+                icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
+                title="The Orchid Manali"
+                sub="20 May to 22 May · 2 Nights"
+                current="Current: Rs 6,900 / night"
+                change="Rs 800"
+              />
+            </>
+          )}
         </div>
       </Section>
 
-      {/* Travel Tasks */}
       <Section
         icon={<CheckSquare className="h-4 w-4 text-brand" />}
         title="Travel Tasks"
@@ -140,8 +215,8 @@ export function RightPanel() {
         footer={<FooterLink label="View All Tasks" />}
       >
         <div className="space-y-2">
-          <TaskRow title="Book flights to Bagdogra" due="By 18 May" badge="Urgent" tone="danger" />
-          <TaskRow title="Pack warm clothes" due="By 19 May" badge="To-do" tone="info" />
+          <TaskRow title="Confirm chosen stay" due={status} badge={chosenListing ? "Ready" : "To-do"} tone="info" />
+          <TaskRow title="Watch price changes" due="After ranking" badge="Auto" tone="success" />
         </div>
       </Section>
     </aside>
@@ -155,11 +230,11 @@ function Section({
   footer,
   children,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
-  rightSlot?: React.ReactNode;
-  footer?: React.ReactNode;
-  children: React.ReactNode;
+  rightSlot?: ReactNode;
+  footer?: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
@@ -209,7 +284,7 @@ function DealRow({
   image: string;
   title: string;
   subtitle: string;
-  meta: React.ReactNode;
+  meta: ReactNode;
   price: string;
   priceSub?: string;
   badge?: { text: string; tone: keyof typeof toneClass };
@@ -252,7 +327,7 @@ function WatchRow({
   current,
   change,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   sub: string;
   current: string;
