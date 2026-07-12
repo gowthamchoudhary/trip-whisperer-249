@@ -49,6 +49,18 @@ function normalizeCandidate(item, index) {
 }
 
 export async function researchDestinations(tripRequestId, intent) {
+  if (intent.destination) {
+    const row = await insertCandidate({
+      trip_request_id: tripRequestId,
+      destination_name: intent.destination,
+      region: '',
+      reasoning_text: 'Destination specified directly by traveler.',
+      source_citations: []
+    });
+
+    return [row];
+  }
+
   const dateRange = [intent.date_range_start, intent.date_range_end].filter(Boolean).join(' to ') || 'flexible dates';
   const prompt = `Best ${intent.terrain_preference || 'travel'} destinations reachable from ${intent.origin_city || 'Bengaluru'} in ${dateRange}, budget ${intent.budget || 'flexible'} INR. Return 4-6 structured destinations with destination_name, region, reasoning_text, and source_citations.`;
 

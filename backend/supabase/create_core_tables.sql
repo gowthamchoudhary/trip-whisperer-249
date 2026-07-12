@@ -6,6 +6,7 @@ create table if not exists trip_requests (
   status text not null default 'queued',
   budget numeric,
   duration_days integer,
+  destination text,
   terrain_preference text,
   weather_preference text,
   date_range_start date,
@@ -20,6 +21,7 @@ create table if not exists chat_messages (
   trip_request_id uuid not null references trip_requests(id) on delete cascade,
   role text not null check (role in ('user', 'assistant', 'system')),
   content text not null,
+  stage_icon text,
   created_at timestamptz not null default now()
 );
 
@@ -57,6 +59,7 @@ create table if not exists listings (
   image_url text,
   listing_url text,
   is_chosen boolean not null default false,
+  rank integer,
   created_at timestamptz not null default now()
 );
 
@@ -85,6 +88,28 @@ create table if not exists monitors (
   created_at timestamptz not null default now()
 );
 
+create table if not exists itinerary_days (
+  id uuid primary key default gen_random_uuid(),
+  trip_request_id uuid not null references trip_requests(id) on delete cascade,
+  day_number integer not null,
+  title text not null,
+  activities jsonb not null default '[]'::jsonb,
+  source_citations jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table if exists trip_requests
+  add column if not exists destination text;
+
+alter table if exists chat_messages
+  add column if not exists stage_icon text;
+
+alter table if exists listings
+  add column if not exists rank integer;
+
+alter table if exists itinerary_days
+  add column if not exists source_citations jsonb not null default '[]'::jsonb;
+
 alter table if exists monitors
   add column if not exists alert_webhook_secret text;
 
@@ -93,6 +118,8 @@ create index if not exists candidates_trip_request_id_idx on candidates(trip_req
 create index if not exists weather_scores_candidate_id_idx on weather_scores(candidate_id);
 create index if not exists listings_trip_request_id_idx on listings(trip_request_id);
 create index if not exists listings_candidate_id_idx on listings(candidate_id);
+create index if not exists listings_trip_request_rank_idx on listings(trip_request_id, rank);
 create index if not exists flights_trip_request_id_idx on flights(trip_request_id);
 create index if not exists monitors_listing_id_idx on monitors(listing_id);
 create index if not exists monitors_anakin_monitor_id_idx on monitors(anakin_monitor_id);
+create index if not exists itinerary_days_trip_request_id_idx on itinerary_days(trip_request_id);

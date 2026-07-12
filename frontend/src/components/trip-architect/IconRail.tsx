@@ -1,4 +1,5 @@
-import { History, Send } from "lucide-react";
+import { History } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export function IconRail() {
@@ -6,9 +7,9 @@ export function IconRail() {
     <aside className="flex w-[72px] shrink-0 flex-col items-center gap-3 border-r border-border/60 bg-surface py-4">
       <button
         aria-label="Trip Architect home"
-        className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand text-brand-foreground shadow-sm"
+        className="flex h-11 w-11 items-center justify-center rounded-xl shadow-sm"
       >
-        <Send className="h-5 w-5 -rotate-45" />
+        <BrandMark className="h-11 w-11" />
       </button>
 
       <nav className="mt-4 flex flex-col items-center gap-2">

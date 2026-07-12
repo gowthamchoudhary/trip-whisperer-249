@@ -4,6 +4,7 @@ export interface TripMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  stage_icon?: string | null;
   created_at: string;
 }
 
@@ -13,6 +14,7 @@ export interface TripRequest {
   user_id?: string | null;
   budget?: number | null;
   duration_days?: number | null;
+  destination?: string | null;
   terrain_preference?: string | null;
   weather_preference?: string | null;
   date_range_start?: string | null;
@@ -34,6 +36,7 @@ export interface TripListing {
   image_url: string | null;
   listing_url: string | null;
   is_chosen: boolean;
+  rank?: number | null;
 }
 
 export interface TripMonitor {
@@ -74,12 +77,23 @@ export interface TripFlight {
   booking_url: string | null;
 }
 
+export interface TripItineraryDay {
+  id: string;
+  trip_request_id: string;
+  day_number: number;
+  title: string;
+  activities: string[];
+  source_citations?: unknown[];
+  created_at?: string;
+}
+
 export interface TripSummary {
   trip_request: TripRequest;
   messages: TripMessage[];
   candidates: TripCandidate[];
   listings: TripListing[];
   flights: TripFlight[];
+  itinerary_days: TripItineraryDay[];
   monitors: TripMonitor[];
 }
 

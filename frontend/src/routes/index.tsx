@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  Send,
   ArrowRight,
   ShieldCheck,
   Cloud,
@@ -15,6 +14,7 @@ import {
   Instagram,
   Youtube,
 } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
@@ -33,9 +33,7 @@ export const Route = createFileRoute("/")({
 function Logo() {
   return (
     <Link to="/" className="flex items-center gap-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/10">
-        <Send className="h-4 w-4 -rotate-45 text-brand" strokeWidth={2.5} />
-      </span>
+      <BrandMark className="h-9 w-9" />
       <span className="text-lg font-semibold tracking-tight text-foreground">
         Trip Architect
       </span>

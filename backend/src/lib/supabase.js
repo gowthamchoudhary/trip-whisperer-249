@@ -43,14 +43,27 @@ export function getTripRequestById(id) {
   );
 }
 
-export function insertChatMessage(tripRequestId, role, content) {
+export function insertChatMessage(tripRequestId, role, content, stageIcon = null) {
   return unwrap(
     supabase.from('chat_messages').insert({
       trip_request_id: tripRequestId,
       role,
-      content
+      content,
+      stage_icon: stageIcon
     }).select().single(),
     'Failed to insert chat message'
+  );
+}
+
+export function getUserMessagesForTrip(tripRequestId) {
+  return unwrap(
+    supabase
+      .from('chat_messages')
+      .select('content')
+      .eq('trip_request_id', tripRequestId)
+      .eq('role', 'user')
+      .order('created_at', { ascending: true }),
+    'Failed to fetch user messages'
   );
 }
 
@@ -78,10 +91,17 @@ export function insertMonitor(row) {
   return unwrap(supabase.from('monitors').insert(row).select().single(), 'Failed to insert monitor');
 }
 
-export function updateListingChosen(listingId, isChosen = true) {
+export function updateListingChosen(listingId, isChosen = true, rank = null) {
   return unwrap(
-    supabase.from('listings').update({ is_chosen: isChosen }).eq('id', listingId).select().single(),
+    supabase.from('listings').update({ is_chosen: isChosen, rank }).eq('id', listingId).select().single(),
     'Failed to update chosen listing'
+  );
+}
+
+export function resetListingDecisions(tripRequestId) {
+  return unwrap(
+    supabase.from('listings').update({ is_chosen: false, rank: null }).eq('trip_request_id', tripRequestId).select(),
+    'Failed to reset listing decisions'
   );
 }
 
@@ -98,4 +118,8 @@ export function getMonitorByAnakinId(anakinMonitorId) {
 
 export function updateMonitor(id, values) {
   return unwrap(supabase.from('monitors').update(values).eq('id', id).select().single(), 'Failed to update monitor');
+}
+
+export function insertItineraryDay(row) {
+  return unwrap(supabase.from('itinerary_days').insert(row).select().single(), 'Failed to insert itinerary day');
 }

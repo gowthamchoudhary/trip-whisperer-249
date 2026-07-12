@@ -25,8 +25,14 @@ function nextWeekendStart() {
 }
 
 function normalizeIntent(intent) {
+  const destination = typeof intent.destination === 'string' && intent.destination.trim()
+    ? intent.destination.trim()
+    : null;
+
   const normalized = {
     ...intent,
+    destination,
+    terrain_preference: destination ? null : intent.terrain_preference || null,
     origin_city: intent.origin_city || 'Bengaluru'
   };
   const durationDays = Number(normalized.duration_days) > 0 ? Number(normalized.duration_days) : 3;
@@ -61,12 +67,15 @@ Return JSON with exactly these keys:
 {
   "budget": number | null,
   "duration_days": number | null,
+  "destination": string | null,
   "terrain_preference": string | null,
   "weather_preference": string | null,
   "date_range_start": "YYYY-MM-DD" | null,
   "date_range_end": "YYYY-MM-DD" | null,
   "origin_city": string
 }
+If the user names a specific place they want to go, extract it into destination and leave terrain_preference null.
+Only use terrain_preference when the user describes a style/vibe without naming a place.
 Default origin_city to "Bengaluru" if it is not mentioned. Interpret budget as INR.`;
 
   const intent = await askGroqJSON(systemPrompt, userMessage);

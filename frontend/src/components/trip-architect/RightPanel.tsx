@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { ArrowDown, ArrowRight, ArrowUp, Bell, Plus, Star } from "lucide-react";
-import type { TripMonitor, TripSummary } from "@/lib/tripArchitectApi";
+import { ArrowDown, ArrowRight, ArrowUp, Bell, CalendarDays, Plus, Star } from "lucide-react";
+import type { TripListing, TripMonitor, TripSummary } from "@/lib/tripArchitectApi";
 
 interface RightPanelProps {
   activeTripId: string | null;
@@ -39,9 +39,29 @@ function trendForMonitor(monitor: TripMonitor | null) {
   };
 }
 
+function sortedOptions(listings: TripListing[] = []) {
+  return [...listings]
+    .sort((a, b) => {
+      const aRank = Number.isFinite(Number(a.rank)) ? Number(a.rank) : Number.MAX_SAFE_INTEGER;
+      const bRank = Number.isFinite(Number(b.rank)) ? Number(b.rank) : Number.MAX_SAFE_INTEGER;
+      if (aRank !== bRank) return aRank - bRank;
+      if (a.is_chosen !== b.is_chosen) return a.is_chosen ? -1 : 1;
+      return Number(a.price || Number.MAX_SAFE_INTEGER) - Number(b.price || Number.MAX_SAFE_INTEGER);
+    })
+    .slice(0, 3);
+}
+
+function platformLabel(platform: string) {
+  if (platform === "airbnb") return "Airbnb";
+  if (platform === "agoda") return "Agoda";
+  return platform;
+}
+
 export function RightPanel({ activeTripId, onNewTrip, tripSummary }: RightPanelProps) {
-  const chosenListing = tripSummary?.listings.find((listing) => listing.is_chosen) || null;
+  const options = sortedOptions(tripSummary?.listings || []);
+  const chosenListing = options.find((listing) => listing.is_chosen) || options[0] || null;
   const monitor = (tripSummary?.monitors || []).find((item) => item.listing_id === chosenListing?.id) || null;
+  const itineraryDays = tripSummary?.itinerary_days || [];
 
   const trend = trendForMonitor(monitor);
 
@@ -57,45 +77,101 @@ export function RightPanel({ activeTripId, onNewTrip, tripSummary }: RightPanelP
         </button>
       </div>
 
-      <Section title="Your Pick">
-        {chosenListing && tripSummary?.trip_request.status === "completed" ? (
-          <div className="flex gap-3">
-            {chosenListing.image_url ? (
-              <img src={chosenListing.image_url} alt={chosenListing.listing_name} className="h-16 w-16 shrink-0 rounded-lg object-cover" />
-            ) : (
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-muted text-[10px] text-muted-foreground">
-                No image
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground">{chosenListing.listing_name}</p>
-              <p className="truncate text-xs text-muted-foreground">{chosenListing.source_platform}</p>
-              <div className="mt-1 flex items-center gap-2">
-                <p className="text-sm font-semibold text-foreground">
-                  {formatCurrency(chosenListing.price, chosenListing.currency || "INR")}
-                </p>
-                {chosenListing.rating !== null && (
-                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                    {chosenListing.rating}
-                  </span>
-                )}
-              </div>
-              {chosenListing.listing_url && (
-                <a
-                  href={chosenListing.listing_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+      <Section title="Your Options">
+        {options.length > 0 ? (
+          <div className="space-y-3">
+            {options.map((listing, index) => {
+              const isBest = index === 0;
+              return (
+                <article
+                  key={listing.id}
+                  className={
+                    "rounded-xl border p-3 " +
+                    (isBest ? "border-brand/50 bg-brand/5 shadow-sm" : "border-border/70 bg-surface/70")
+                  }
                 >
-                  Book on {chosenListing.source_platform === "airbnb" ? "Airbnb" : "Agoda"}
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </a>
-              )}
-            </div>
+                  <div className="flex gap-3">
+                    {listing.image_url ? (
+                      <img
+                        src={listing.image_url}
+                        alt={listing.listing_name}
+                        className={isBest ? "h-16 w-16 shrink-0 rounded-lg object-cover" : "h-12 w-12 shrink-0 rounded-lg object-cover"}
+                      />
+                    ) : (
+                      <div className={isBest ? "flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-muted text-[10px] text-muted-foreground" : "flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted text-[10px] text-muted-foreground"}>
+                        No image
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                          #{listing.rank || index + 1}
+                        </span>
+                        {isBest && (
+                          <span className="rounded-md bg-brand px-1.5 py-0.5 text-[10px] font-semibold text-brand-foreground">
+                            Best Match
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 truncate text-sm font-medium text-foreground">{listing.listing_name}</p>
+                      <p className="truncate text-xs text-muted-foreground">{platformLabel(listing.source_platform)}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">
+                          {formatCurrency(listing.price, listing.currency || "INR")}
+                        </p>
+                        {listing.rating !== null && (
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            {listing.rating}
+                          </span>
+                        )}
+                      </div>
+                      {listing.listing_url && (
+                        <a
+                          href={listing.listing_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+                        >
+                          Book on {platformLabel(listing.source_platform)}
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         ) : (
-          <EmptyState text={activeTripId ? "Your chosen stay will appear when planning completes." : "Start or select a trip to see your pick."} />
+          <EmptyState text={activeTripId ? "Stay options will appear as soon as ranking completes." : "Start or select a trip to see options."} />
+        )}
+      </Section>
+
+      <Section title="Your Itinerary" icon={<CalendarDays className="h-4 w-4 text-brand" />}>
+        {itineraryDays.length > 0 ? (
+          <ol className="space-y-3">
+            {itineraryDays.map((day) => {
+              const activities = Array.isArray(day.activities) ? day.activities : [];
+              return (
+                <li key={day.id} className="border-l border-border pl-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Day {day.day_number}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{day.title}</p>
+                  <ul className="mt-2 space-y-1">
+                    {activities.map((activity, index) => (
+                      <li key={`${day.id}-${index}`} className="text-xs leading-5 text-muted-foreground">
+                        {activity}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              );
+            })}
+          </ol>
+        ) : (
+          <EmptyState text={activeTripId ? "Your day-by-day plan will appear after ranking." : "Start or select a trip to see an itinerary."} />
         )}
       </Section>
 

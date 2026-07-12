@@ -22,6 +22,7 @@ function formatDate(value?: string) {
 function statusClass(status: string) {
   if (status === "completed") return "bg-success text-success-foreground";
   if (status === "failed") return "bg-danger text-danger-foreground";
+  if (status === "awaiting_input") return "bg-info text-info-foreground";
   if (status === "queued") return "bg-muted text-muted-foreground";
   return "bg-info text-info-foreground";
 }

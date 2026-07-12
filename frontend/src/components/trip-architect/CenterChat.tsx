@@ -1,7 +1,23 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { ArrowRight, ArrowUp, CheckCircle2, Loader2, LogOut, Send } from "lucide-react";
-import type { TripCandidate, TripListing, TripSummary } from "@/lib/tripArchitectApi";
+import {
+  ArrowRight,
+  ArrowUp,
+  AlertTriangle,
+  Bell,
+  CalendarDays,
+  CheckCircle2,
+  Cloud,
+  HelpCircle,
+  Home,
+  Loader2,
+  LogOut,
+  MessageCircle,
+  Plane,
+  Search,
+} from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
+import type { TripCandidate, TripListing, TripMessage, TripSummary } from "@/lib/tripArchitectApi";
 
 interface CenterChatProps {
   activeTripId: string | null;
@@ -36,6 +52,42 @@ function weatherScore(candidate: TripCandidate | null) {
   return candidate?.weather_scores?.[0]?.match_score ?? null;
 }
 
+function inferredStageIcon(content: string) {
+  const lower = content.toLowerCase();
+  if (lower.includes("research")) return "search";
+  if (lower.includes("weather") || lower.includes("forecast")) return "cloud";
+  if (lower.includes("stay") || lower.includes("listing")) return "home";
+  if (lower.includes("flight")) return "plane";
+  if (lower.includes("itinerary") || lower.includes("day-by-day")) return "calendar";
+  if (lower.includes("monitor") || lower.includes("price")) return "bell";
+  if (lower.includes("rank") || lower.includes("ready") || lower.includes("picked")) return "check";
+  if (lower.includes("budget") || lower.includes("how many days") || lower.includes("where do you want")) return "help";
+  if (lower.includes("problem") || lower.includes("failed")) return "alert";
+  return null;
+}
+
+function stageIconName(message: TripMessage) {
+  return message.stage_icon || inferredStageIcon(message.content);
+}
+
+function isTimelineMessage(message: TripMessage) {
+  return message.role === "assistant" && stageIconName(message) !== null;
+}
+
+function StageIcon({ name }: { name: string | null }) {
+  const iconClassName = "h-3.5 w-3.5";
+  if (name === "search") return <Search className={iconClassName} />;
+  if (name === "cloud") return <Cloud className={iconClassName} />;
+  if (name === "home") return <Home className={iconClassName} />;
+  if (name === "plane") return <Plane className={iconClassName} />;
+  if (name === "calendar") return <CalendarDays className={iconClassName} />;
+  if (name === "bell") return <Bell className={iconClassName} />;
+  if (name === "check") return <CheckCircle2 className={iconClassName} />;
+  if (name === "help") return <HelpCircle className={iconClassName} />;
+  if (name === "alert") return <AlertTriangle className={iconClassName} />;
+  return <MessageCircle className={iconClassName} />;
+}
+
 export function CenterChat({
   activeTripId,
   error,
@@ -50,6 +102,10 @@ export function CenterChat({
   const candidate = candidateForListing(tripSummary, listing);
   const matchScore = weatherScore(candidate);
   const status = tripSummary?.trip_request.status || (activeTripId ? "loading" : "ready");
+  const awaitingInput = status === "awaiting_input";
+  const canSendMessage = !activeTripId || awaitingInput;
+  const timelineMessages = tripSummary?.messages.filter(isTimelineMessage) || [];
+  const lastTimelineMessageId = timelineMessages[timelineMessages.length - 1]?.id;
   const failedMessage =
     status === "failed" ? tripSummary?.messages[tripSummary.messages.length - 1]?.content || "Trip planning failed." : null;
 
@@ -81,9 +137,7 @@ export function CenterChat({
         <div className="mx-auto flex min-h-full max-w-2xl flex-col">
           {!activeTripId ? (
             <div className="flex flex-1 flex-col items-center justify-center text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-brand-soft">
-                <Send className="h-6 w-6 -rotate-45 text-brand" />
-              </div>
+              <BrandMark className="h-16 w-16" />
               <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
                 Your AI Travel Architect
               </h1>
@@ -93,18 +147,46 @@ export function CenterChat({
             </div>
           ) : (
             <div className="space-y-4">
-              {tripSummary?.messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={
-                    message.role === "user"
-                      ? "ml-auto max-w-[82%] rounded-2xl bg-brand px-4 py-2 text-sm text-brand-foreground"
-                      : "max-w-[82%] rounded-2xl border border-border/60 bg-surface px-4 py-2 text-sm text-foreground"
-                  }
-                >
-                  {message.content}
-                </div>
-              ))}
+              {tripSummary?.messages.map((message) => {
+                if (message.role === "user") {
+                  return (
+                    <div
+                      key={message.id}
+                      className="ml-auto max-w-[82%] rounded-2xl bg-brand px-4 py-2 text-sm text-brand-foreground"
+                    >
+                      {message.content}
+                    </div>
+                  );
+                }
+
+                if (isTimelineMessage(message)) {
+                  const iconName = stageIconName(message);
+                  const isLastTimelineMessage = message.id === lastTimelineMessageId;
+
+                  return (
+                    <div key={message.id} className="relative flex max-w-[88%] gap-3">
+                      {!isLastTimelineMessage && (
+                        <span className="absolute left-[15px] top-8 h-[calc(100%+0.5rem)] w-px bg-border" />
+                      )}
+                      <span className="relative z-10 mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-card text-brand shadow-sm">
+                        <StageIcon name={iconName} />
+                      </span>
+                      <div className="rounded-2xl border border-border/60 bg-surface px-4 py-2 text-sm text-foreground">
+                        {message.content}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={message.id}
+                    className="max-w-[82%] rounded-2xl border border-border/60 bg-surface px-4 py-2 text-sm text-foreground"
+                  >
+                    {message.content}
+                  </div>
+                );
+              })}
 
               {isPlanning && (
                 <div className="inline-flex items-center gap-2 rounded-2xl border border-border/60 bg-surface px-4 py-2 text-sm text-muted-foreground">
@@ -168,7 +250,7 @@ export function CenterChat({
 
       <div className="border-t border-border/60 px-6 py-4">
         <div className="mx-auto max-w-2xl">
-          {!activeTripId ? (
+          {canSendMessage ? (
             <form
               onSubmit={submitMessage}
               className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2 shadow-sm"
@@ -176,7 +258,7 @@ export function CenterChat({
               <input
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
-                placeholder="3 days, cloudy mountains, 40000 INR, from Bengaluru..."
+                placeholder={awaitingInput ? "Reply with the missing trip detail..." : "3 days, cloudy mountains, 40000 INR, from Bengaluru..."}
                 className="flex-1 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
                 disabled={isPlanning}
               />
