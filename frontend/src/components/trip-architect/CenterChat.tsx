@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { ArrowRight, ArrowUp, CheckCircle2, Loader2, LogOut, Send } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 import type { TripCandidate, TripListing, TripSummary } from "@/lib/tripArchitectApi";
 
 interface CenterChatProps {
@@ -81,9 +82,7 @@ export function CenterChat({
         <div className="mx-auto flex min-h-full max-w-2xl flex-col">
           {!activeTripId ? (
             <div className="flex flex-1 flex-col items-center justify-center text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-brand-soft">
-                <Send className="h-6 w-6 -rotate-45 text-brand" />
-              </div>
+              <BrandMark className="h-16 w-16" />
               <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
                 Your AI Travel Architect
               </h1>

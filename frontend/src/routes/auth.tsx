@@ -10,9 +10,9 @@ import {
   LockKeyhole,
   Mail,
   RotateCw,
-  Send,
   ShieldCheck,
 } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/auth")({
@@ -171,9 +171,7 @@ function AuthPage() {
         <div className="hidden border-r border-border/70 bg-[#0f0f0f] p-8 text-white lg:flex lg:flex-col lg:justify-between">
           <div>
             <Link to="/" className="inline-flex items-center gap-2">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-black">
-                <Send className="h-5 w-5 -rotate-45" />
-              </span>
+              <BrandMark className="h-10 w-10" />
               <span className="text-lg font-semibold tracking-tight">Trip Architect</span>
             </Link>
             <h1 className="mt-12 max-w-sm text-4xl font-semibold leading-tight tracking-tight">
@@ -201,9 +199,7 @@ function AuthPage() {
         <div className="p-6 sm:p-8 lg:p-10">
           <div className="mb-8 flex items-center justify-between gap-4">
             <Link to="/" className="flex items-center gap-2 lg:hidden">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-soft">
-                <Send className="h-4 w-4 -rotate-45 text-brand" />
-              </span>
+              <BrandMark className="h-9 w-9" />
               <span className="text-lg font-semibold tracking-tight">Trip Architect</span>
             </Link>
             <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground">
