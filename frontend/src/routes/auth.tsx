@@ -42,6 +42,57 @@ function authRedirectUrl() {
   return import.meta.env.VITE_AUTH_REDIRECT_URL || currentRedirectUrl;
 }
 
+function readableAuthError(authError: unknown, fallback: string) {
+  if (!authError || typeof authError !== "object") return fallback;
+  const error = authError as {
+    code?: string;
+    message?: string;
+    name?: string;
+    status?: number;
+  };
+  const message = error.message || fallback;
+
+  if (/email not confirmed/i.test(message)) {
+    return "Email is not confirmed yet. Use the latest confirmation email or resend it below.";
+  }
+
+  if (/invalid login credentials/i.test(message)) {
+    return "Invalid email or password. If you just created the account, confirm the newest email first, then sign in.";
+  }
+
+  if (/redirect/i.test(message) || error.code === "bad_oauth_callback") {
+    return `Auth redirect is not allowed by Supabase. Add this URL in Supabase Auth redirect URLs: ${authRedirectUrl()}`;
+  }
+
+  if (error.status) {
+    return `${message} (Supabase status ${error.status}${error.code ? `, code ${error.code}` : ""})`;
+  }
+
+  return message;
+}
+
+function logAuthError(action: string, authError: unknown) {
+  if (!authError || typeof authError !== "object") {
+    console.error(`[Auth] ${action} failed`, authError);
+    return;
+  }
+
+  const error = authError as {
+    code?: string;
+    message?: string;
+    name?: string;
+    status?: number;
+  };
+
+  console.error(`[Auth] ${action} failed`, {
+    name: error.name,
+    status: error.status,
+    code: error.code,
+    message: error.message,
+    redirectTo: authRedirectUrl(),
+  });
+}
+
 function readSupabaseUrlError() {
   if (typeof window === "undefined") return null;
 
@@ -126,12 +177,8 @@ function AuthPage() {
         setMode("signin");
       }
     } catch (authError) {
-      const nextError = authError instanceof Error ? authError.message : "Authentication failed.";
-      setError(
-        /email not confirmed/i.test(nextError)
-          ? "Email is not confirmed yet. Use the latest confirmation email or resend it below."
-          : nextError,
-      );
+      logAuthError(mode === "signin" ? "sign in" : "sign up", authError);
+      setError(readableAuthError(authError, "Authentication failed."));
     } finally {
       setLoading(false);
     }
@@ -159,7 +206,8 @@ function AuthPage() {
       if (resendError) throw resendError;
       setMessage("Fresh confirmation email sent. Use the newest link only.");
     } catch (resendError) {
-      setError(resendError instanceof Error ? resendError.message : "Could not resend confirmation.");
+      logAuthError("resend confirmation", resendError);
+      setError(readableAuthError(resendError, "Could not resend confirmation."));
     } finally {
       setResending(false);
     }
@@ -325,7 +373,7 @@ function AuthPage() {
           <p className="mt-7 max-w-md text-xs leading-5 text-muted-foreground">
             If confirmation redirects to the landing page, add this redirect URL in your auth provider:
             <span className="mt-1 block rounded-lg bg-muted px-2 py-1 font-mono text-[11px] text-foreground">
-              http://127.0.0.1:5173/auth
+              {authRedirectUrl()}
             </span>
           </p>
         </div>
