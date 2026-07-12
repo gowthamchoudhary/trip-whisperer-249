@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { IconRail } from "@/components/trip-architect/IconRail";
 import { TripListPanel } from "@/components/trip-architect/TripListPanel";
@@ -20,21 +20,11 @@ function TripArchitectPage() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [tripRequestId, setTripRequestId] = useState<string | undefined>();
+  const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [tripSummary, setTripSummary] = useState<TripSummary | null>(null);
   const [isPlanning, setIsPlanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const status = tripSummary?.trip_request.status;
-  const shouldPoll = useMemo(
-    () =>
-      Boolean(
-        tripRequestId &&
-          status !== "completed" &&
-          status !== "failed",
-      ),
-    [status, tripRequestId],
-  );
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -65,14 +55,28 @@ function TripArchitectPage() {
     };
   }, [navigate]);
 
+  const loadTrip = useCallback(async (tripId: string) => {
+    const summary = await getTripSummary(tripId);
+    setTripSummary(summary);
+    setIsPlanning(
+      summary.trip_request.status !== "completed" &&
+        summary.trip_request.status !== "failed",
+    );
+  }, []);
+
   useEffect(() => {
-    if (!tripRequestId || !shouldPoll) return;
+    if (!activeTripId) {
+      setTripSummary(null);
+      setIsPlanning(false);
+      return;
+    }
 
     let cancelled = false;
+    let debounceId: number | undefined;
 
-    async function poll() {
+    async function refresh() {
       try {
-        const summary = await getTripSummary(tripRequestId);
+        const summary = await getTripSummary(activeTripId);
         if (!cancelled) {
           setTripSummary(summary);
           setIsPlanning(
@@ -87,23 +91,64 @@ function TripArchitectPage() {
       }
     }
 
-    poll();
-    const interval = window.setInterval(poll, 3000);
+    function scheduleRefresh() {
+      if (debounceId) window.clearTimeout(debounceId);
+      debounceId = window.setTimeout(refresh, 250);
+    }
+
+    refresh();
+    const interval = window.setInterval(refresh, 3000);
+
+    const tripChannel = supabase
+      .channel(`trip-request-${activeTripId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trip_requests", filter: `id=eq.${activeTripId}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "chat_messages", filter: `trip_request_id=eq.${activeTripId}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "listings", filter: `trip_request_id=eq.${activeTripId}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "flights", filter: `trip_request_id=eq.${activeTripId}` },
+        scheduleRefresh,
+      )
+      .subscribe();
+
+    const relatedChannel = supabase
+      .channel(`trip-related-${activeTripId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "candidates" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "weather_scores" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "monitors" }, scheduleRefresh)
+      .subscribe();
+
     return () => {
       cancelled = true;
+      if (debounceId) window.clearTimeout(debounceId);
       window.clearInterval(interval);
+      supabase.removeChannel(tripChannel);
+      supabase.removeChannel(relatedChannel);
     };
-  }, [shouldPoll, tripRequestId]);
+  }, [activeTripId, loadTrip]);
 
   async function handleSend(message: string) {
+    if (!user?.id) return;
     setError(null);
     setIsPlanning(true);
 
     try {
-      const started = await startTripPlan(message, tripRequestId, user?.id);
-      setTripRequestId(started.trip_request_id);
-      const summary = await getTripSummary(started.trip_request_id);
-      setTripSummary(summary);
+      const started = await startTripPlan(message, undefined, user.id);
+      setActiveTripId(started.trip_request_id);
+      setHistoryRefreshKey((key) => key + 1);
+      await loadTrip(started.trip_request_id);
     } catch (sendError) {
       setIsPlanning(false);
       setError(sendError instanceof Error ? sendError.message : "Unable to start trip planning.");
@@ -115,10 +160,30 @@ function TripArchitectPage() {
     navigate({ to: "/auth" });
   }
 
+  function handleNewTrip() {
+    setActiveTripId(null);
+    setTripSummary(null);
+    setIsPlanning(false);
+    setError(null);
+  }
+
+  async function handleSelectTrip(tripId: string) {
+    setError(null);
+    setActiveTripId(tripId);
+    try {
+      await loadTrip(tripId);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to load trip.");
+    }
+  }
+
   if (!authChecked) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-surface font-sans text-foreground">
-        <div className="rounded-2xl border border-border bg-card px-5 py-4 text-sm shadow-sm">
+      <div
+        suppressHydrationWarning
+        className="flex h-screen w-screen items-center justify-center bg-surface font-sans text-foreground"
+      >
+        <div suppressHydrationWarning className="rounded-2xl border border-border bg-card px-5 py-4 text-sm shadow-sm">
           Checking your session...
         </div>
       </div>
@@ -128,8 +193,14 @@ function TripArchitectPage() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-surface font-sans text-foreground">
       <IconRail />
-      <TripListPanel />
+      <TripListPanel
+        activeTripId={activeTripId}
+        refreshKey={historyRefreshKey}
+        userId={user?.id || null}
+        onSelectTrip={handleSelectTrip}
+      />
       <CenterChat
+        activeTripId={activeTripId}
         error={error}
         isPlanning={isPlanning}
         onSignOut={handleSignOut}
@@ -137,7 +208,7 @@ function TripArchitectPage() {
         tripSummary={tripSummary}
         userEmail={user?.email}
       />
-      <RightPanel tripSummary={tripSummary} />
+      <RightPanel activeTripId={activeTripId} onNewTrip={handleNewTrip} tripSummary={tripSummary} />
     </div>
   );
 }
