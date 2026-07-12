@@ -1,24 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { IconRail } from "@/components/trip-architect/IconRail";
+import { TripListPanel } from "@/components/trip-architect/TripListPanel";
+import { CenterChat } from "@/components/trip-architect/CenterChat";
+import { RightPanel } from "@/components/trip-architect/RightPanel";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
-  component: Index,
+  component: TripArchitectPage,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
+function TripArchitectPage() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="flex h-screen w-screen overflow-hidden bg-surface font-sans text-foreground">
+      <IconRail />
+      <TripListPanel />
+      <CenterChat />
+      <RightPanel />
     </div>
   );
 }
