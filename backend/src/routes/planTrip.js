@@ -1,5 +1,11 @@
 import express from 'express';
-import { getTripRequestById, insertChatMessage, insertTripRequest, supabase } from '../lib/supabase.js';
+import {
+  getTripRequestById,
+  getUserMessagesForTrip,
+  insertChatMessage,
+  insertTripRequest,
+  supabase
+} from '../lib/supabase.js';
 import { orchestrateTrip } from '../pipeline/orchestrator.js';
 
 export const planTripRouter = express.Router();
@@ -29,8 +35,12 @@ planTripRouter.post('/plan-trip', async (req, res) => {
       await insertChatMessage(tripRequest.id, 'user', userMessage);
     }
 
+    const orchestrationMessage = tripRequest.status === 'awaiting_input'
+      ? (await getUserMessagesForTrip(tripRequest.id)).map((message) => message.content).join('\n')
+      : userMessage;
+
     setImmediate(() => {
-      orchestrateTrip(tripRequest, userMessage).catch((error) => {
+      orchestrateTrip(tripRequest, orchestrationMessage).catch((error) => {
         console.error(`[Trip Architect] Background orchestration failed: ${error.message}`);
       });
     });
@@ -45,7 +55,7 @@ planTripRouter.get('/trip/:tripRequestId', async (req, res) => {
   const { tripRequestId } = req.params;
 
   try {
-    const [tripRequest, messages, candidates, listings, flights] = await Promise.all([
+    const [tripRequest, messages, candidates, listings, flights, itineraryDays] = await Promise.all([
       getTripRequestById(tripRequestId),
       supabase
         .from('chat_messages')
@@ -61,15 +71,22 @@ planTripRouter.get('/trip/:tripRequestId', async (req, res) => {
         .from('listings')
         .select('*')
         .eq('trip_request_id', tripRequestId)
+        .order('rank', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: true }),
       supabase
         .from('flights')
         .select('*')
         .eq('trip_request_id', tripRequestId)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('itinerary_days')
+        .select('*')
+        .eq('trip_request_id', tripRequestId)
+        .order('day_number', { ascending: true })
         .order('created_at', { ascending: true })
     ]);
 
-    for (const result of [messages, candidates, listings, flights]) {
+    for (const result of [messages, candidates, listings, flights, itineraryDays]) {
       if (result.error) {
         throw new Error(result.error.message);
       }
@@ -90,6 +107,7 @@ planTripRouter.get('/trip/:tripRequestId', async (req, res) => {
       candidates: candidates.data || [],
       listings: listings.data || [],
       flights: flights.data || [],
+      itinerary_days: itineraryDays.data || [],
       monitors: monitors.data || []
     });
   } catch (error) {

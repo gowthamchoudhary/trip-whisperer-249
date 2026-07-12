@@ -16,6 +16,10 @@ export const Route = createFileRoute("/app")({
   component: TripArchitectPage,
 });
 
+function isTripPlanning(status?: string | null) {
+  return Boolean(status && !["completed", "failed", "awaiting_input"].includes(status));
+}
+
 function TripArchitectPage() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
@@ -58,10 +62,7 @@ function TripArchitectPage() {
   const loadTrip = useCallback(async (tripId: string) => {
     const summary = await getTripSummary(tripId);
     setTripSummary(summary);
-    setIsPlanning(
-      summary.trip_request.status !== "completed" &&
-        summary.trip_request.status !== "failed",
-    );
+    setIsPlanning(isTripPlanning(summary.trip_request.status));
   }, []);
 
   useEffect(() => {
@@ -79,10 +80,7 @@ function TripArchitectPage() {
         const summary = await getTripSummary(activeTripId);
         if (!cancelled) {
           setTripSummary(summary);
-          setIsPlanning(
-            summary.trip_request.status !== "completed" &&
-              summary.trip_request.status !== "failed",
-          );
+          setIsPlanning(isTripPlanning(summary.trip_request.status));
         }
       } catch (pollError) {
         if (!cancelled) {
@@ -121,6 +119,11 @@ function TripArchitectPage() {
         { event: "*", schema: "public", table: "flights", filter: `trip_request_id=eq.${activeTripId}` },
         scheduleRefresh,
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "itinerary_days", filter: `trip_request_id=eq.${activeTripId}` },
+        scheduleRefresh,
+      )
       .subscribe();
 
     const relatedChannel = supabase
@@ -145,7 +148,8 @@ function TripArchitectPage() {
     setIsPlanning(true);
 
     try {
-      const started = await startTripPlan(message, undefined, user.id);
+      const continuingTripId = tripSummary?.trip_request.status === "awaiting_input" ? activeTripId || undefined : undefined;
+      const started = await startTripPlan(message, continuingTripId, user.id);
       setActiveTripId(started.trip_request_id);
       setHistoryRefreshKey((key) => key + 1);
       await loadTrip(started.trip_request_id);

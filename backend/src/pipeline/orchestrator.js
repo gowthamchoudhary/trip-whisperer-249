@@ -8,15 +8,62 @@ import {
 } from '../lib/supabase.js';
 import { findListings } from './findListings.js';
 import { findFlights } from './findFlights.js';
+import { generateItinerary } from './generateItinerary.js';
 import { parseIntent } from './parseIntent.js';
 import { rankAndDecide } from './rankAndDecide.js';
 import { researchDestinations } from './researchDestinations.js';
 import { weatherFilter } from './weatherFilter.js';
 
+const STAGE_ICONS = {
+  awaiting_input: 'help',
+  researching: 'search',
+  filtering_weather: 'cloud',
+  finding_listings: 'home',
+  finding_flights: 'plane',
+  ranking: 'check',
+  building_itinerary: 'calendar',
+  monitoring: 'bell',
+  completed: 'check',
+  failed: 'alert'
+};
+
 async function stage(tripRequestId, status, message) {
   console.log(`[Trip Architect] ${tripRequestId}: ${status}`);
   await updateTripStatus(tripRequestId, status);
-  await insertChatMessage(tripRequestId, 'assistant', message);
+  await insertChatMessage(tripRequestId, 'assistant', message, STAGE_ICONS[status] || 'sparkles');
+}
+
+function hasPositiveNumber(value) {
+  return Number.isFinite(Number(value)) && Number(value) > 0;
+}
+
+function hasText(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function missingCriticalFields(intent) {
+  const missing = [];
+  if (!hasPositiveNumber(intent.budget)) missing.push('budget');
+  if (!hasPositiveNumber(intent.duration_days)) missing.push('duration_days');
+  if (!hasText(intent.destination) && !hasText(intent.terrain_preference)) {
+    missing.push('destination_or_style');
+  }
+  return missing;
+}
+
+function buildClarifyingQuestion(missing) {
+  const questions = {
+    budget: "what's your budget for this trip?",
+    duration_days: 'how many days are you planning?',
+    destination_or_style: 'where do you want to go, or what kind of place should I search for?'
+  };
+  const parts = missing.map((field) => questions[field]).filter(Boolean);
+
+  if (parts.length === 1) {
+    return `Before I plan this properly, ${parts[0]}`;
+  }
+
+  return `Before I plan this properly, I need a few details: ${parts.join(' ')}`;
 }
 
 function extractListingProviderId(listing) {
@@ -109,7 +156,7 @@ async function tryCreateMonitor(tripRequestId, listing, intent) {
   const { config, reason } = buildMonitorConfig(listing, intent);
   if (!config) {
     console.warn(`[Trip Architect] ${tripRequestId}: monitoring skipped - ${reason}`);
-    await insertChatMessage(tripRequestId, 'assistant', `Price monitoring was skipped: ${reason}`);
+    await insertChatMessage(tripRequestId, 'assistant', `Price monitoring was skipped: ${reason}`, 'bell');
     return false;
   }
 
@@ -139,7 +186,7 @@ async function tryCreateMonitor(tripRequestId, listing, intent) {
     return true;
   } catch (error) {
     console.error(`[Trip Architect] ${tripRequestId}: monitoring failed`, error);
-    await insertChatMessage(tripRequestId, 'assistant', `Price monitoring could not be started: ${error.message}`);
+    await insertChatMessage(tripRequestId, 'assistant', `Price monitoring could not be started: ${error.message}`, 'bell');
     return false;
   }
 }
@@ -150,21 +197,35 @@ export async function orchestrateTrip(tripRequest, userMessage) {
   try {
     console.log(`[Trip Architect] ${tripRequest.id}: parsing_intent`);
     intent = await parseIntent(userMessage);
-    await updateTripRequest(tripRequest.id, {
+    const destination = intent.destination || tripRequest.destination || null;
+    const tripValues = {
       budget: intent.budget ?? tripRequest.budget,
       duration_days: intent.duration_days ?? tripRequest.duration_days,
-      terrain_preference: intent.terrain_preference ?? tripRequest.terrain_preference,
+      destination,
+      terrain_preference: destination ? null : intent.terrain_preference ?? tripRequest.terrain_preference,
       weather_preference: intent.weather_preference ?? tripRequest.weather_preference,
       date_range_start: intent.date_range_start ?? tripRequest.date_range_start,
       date_range_end: intent.date_range_end ?? tripRequest.date_range_end,
       origin_city: intent.origin_city ?? tripRequest.origin_city ?? 'Bengaluru'
-    });
+    };
+    const updatedTripRequest = await updateTripRequest(tripRequest.id, tripValues);
 
     const mergedIntent = {
-      ...tripRequest,
-      ...intent,
-      origin_city: intent.origin_city || tripRequest.origin_city || 'Bengaluru'
+      ...updatedTripRequest,
+      ...tripValues
     };
+
+    const missing = missingCriticalFields(mergedIntent);
+    if (missing.length > 0) {
+      const question = buildClarifyingQuestion(missing);
+      console.log(`[Trip Architect] ${tripRequest.id}: awaiting_input`);
+      await updateTripStatus(tripRequest.id, 'awaiting_input');
+      await insertChatMessage(tripRequest.id, 'assistant', question, STAGE_ICONS.awaiting_input);
+      return {
+        status: 'awaiting_input',
+        missing
+      };
+    }
 
     await stage(tripRequest.id, 'researching', 'I am researching destinations that match your trip style.');
     const candidates = await researchDestinations(tripRequest.id, mergedIntent);
@@ -180,6 +241,15 @@ export async function orchestrateTrip(tripRequest, userMessage) {
 
     await stage(tripRequest.id, 'ranking', 'I am ranking the options and choosing the best fit.');
     const decision = await rankAndDecide(tripRequest.id, listings, flights, mergedIntent);
+    const chosenListingWithCandidate = listings.find((listing) => listing.id === decision.chosen_listing_id);
+    const chosenCandidate =
+      chosenListingWithCandidate?.candidate ||
+      weatherFiltered.find((candidate) => candidate.id === chosenListingWithCandidate?.candidate_id) ||
+      weatherFiltered[0];
+
+    await stage(tripRequest.id, 'building_itinerary', 'I am building a day-by-day itinerary for the chosen destination.');
+    await generateItinerary(updatedTripRequest, chosenCandidate, mergedIntent.duration_days);
+
     const chosenListing = await getListingById(decision.chosen_listing_id);
 
     await stage(tripRequest.id, 'monitoring', 'I am setting up price monitoring for the chosen listing.');
@@ -199,7 +269,8 @@ export async function orchestrateTrip(tripRequest, userMessage) {
     await insertChatMessage(
       tripRequest.id,
       'assistant',
-      `I hit a problem while planning the trip: ${error.message}`
+      `I hit a problem while planning the trip: ${error.message}`,
+      STAGE_ICONS.failed
     );
     return null;
   }
