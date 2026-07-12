@@ -44,21 +44,9 @@ function Logo() {
 }
 
 function Nav() {
-  const items = ["Home", "How It Works", "Destinations", "Pricing", "Blog", "About Us"];
   return (
     <header className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
       <Logo />
-      <nav className="hidden items-center gap-8 md:flex">
-        {items.map((i) => (
-          <a
-            key={i}
-            href="#"
-            className={`text-sm ${i === "Home" ? "font-semibold text-foreground underline underline-offset-8 decoration-2" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            {i}
-          </a>
-        ))}
-      </nav>
       <div className="flex items-center gap-4">
         <Link to="/auth" className="text-sm text-foreground hover:opacity-80">
           Log in
@@ -81,17 +69,31 @@ function Hero() {
       <div className="mx-auto max-w-6xl px-6 pt-8 pb-16 text-center">
         {/* Headline */}
         <h1 className="mt-2 text-5xl font-bold tracking-tight text-foreground md:text-6xl">
-          Weather-Matched Trips.
+          Trips,
           <br />
-          <span className="text-brand">Perfectly Planned for You.</span>
+          <span className="text-brand">Actually </span>
+          <span className="relative inline-block text-brand">
+            Planned
+            <svg
+              className="pointer-events-none absolute -bottom-2 left-1/2 h-3 w-[88%] -translate-x-1/2 text-brand"
+              viewBox="0 0 156 18"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M4 12 C 34 18, 69 1, 103 7 C 122 10, 138 13, 152 8"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          </span>
+          <span className="text-foreground"> for You.</span>
         </h1>
 
         <p className="mx-auto mt-5 max-w-2xl text-[15px] leading-relaxed text-muted-foreground">
-          Tell us your budget, duration, and vibe — we find destinations with great weather,{" "}
-          <a href="#" className="font-medium text-brand underline underline-offset-2">
-            real deals
-          </a>
-          , and keep tracking prices until you book with confidence.
+          Tell us your budget, dates, and style - we research real destinations, find real deals,
+          and keep tracking prices until you book with confidence.
         </p>
 
         {/* Filter bar with annotations */}
@@ -495,3 +497,4 @@ function LandingPage() {
     </div>
   );
 }
+
