@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { ArrowRight, CheckCircle2, Eye, EyeOff, Loader2, LockKeyhole, Mail, Send, Sparkles } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -30,6 +30,8 @@ function AuthPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
         navigate({ to: "/app" });
@@ -41,6 +43,12 @@ function AuthPage() {
     event.preventDefault();
     setError(null);
     setMessage(null);
+
+    if (!isSupabaseConfigured) {
+      setError("Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to frontend/.env, then restart the dev server.");
+      return;
+    }
+
     setLoading(true);
 
     try {
