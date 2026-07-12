@@ -4,7 +4,7 @@ import { TripListPanel } from "@/components/trip-architect/TripListPanel";
 import { CenterChat } from "@/components/trip-architect/CenterChat";
 import { RightPanel } from "@/components/trip-architect/RightPanel";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/app")({
   component: TripArchitectPage,
 });
 
